@@ -78,7 +78,7 @@ impl Supervisor {
         let (mut ctx, mut rx, tx) = Context::new(None);
         let addr = Addr {
             actor_id: ctx.actor_id(),
-            tx,
+            tx: tx.clone(),
             rx_exit: ctx.rx_exit.clone(),
         };
 
@@ -103,10 +103,13 @@ impl Supervisor {
                         }
                     }
 
+                    for (_, handle) in ctx.streams.iter() {
+                        handle.abort();
+                    }
+
                     actor.stopped(&mut ctx).await;
 
-                    actor = f();
-                    actor.started(&mut ctx).await.ok();
+                    actor.restarted(&mut ctx).await.ok();
                 }
             }
         });
@@ -114,3 +117,15 @@ impl Supervisor {
         Ok(addr)
     }
 }
+
+// while let Some(event) = rx.next().await {
+//     match event {
+//         ActorEvent::Exec(f) => f(actor.clone(), ctx.clone()).await,
+//         ActorEvent::Stop(_err) => {
+//             actor.lock().await.stopped(&ctx).await;
+//             actor.lock().await.started(&ctx).await.ok();
+//         }
+//     }
+// }
+
+// actor.lock().await.stopped(&ctx).await;

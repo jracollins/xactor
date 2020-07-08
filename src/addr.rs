@@ -111,12 +111,47 @@ impl<A: Actor> Addr<A> {
     where
         A: Handler<T>,
     {
-        let addr = self.clone();
-        Sender(Box::new(move |msg| {
-            let addr = addr.clone();
-            addr.send(msg)
+        let weak_tx = Arc::downgrade(&self.tx);
+        Sender(Box::new(move |msg| match weak_tx.upgrade() {
+            Some(tx) => {
+                mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(Box::new(
+                    move |actor, ctx| {
+                        Box::pin(async move {
+                            Handler::handle(&mut *actor, ctx, msg).await;
+                        })
+                    },
+                )))?;
+                Ok(())
+            }
+            None => Ok(()),
         }))
     }
+
+    //  /// Create a `Sender<T>` for a specific message type
+    //  pub fn sender<T: Message<Result = ()>>(&self) -> Sender<T>
+    //  where
+    //      A: Handler<T>,
+    //  {
+    //      let weak_tx = Arc::downgrade(&self.tx);
+    //      Sender(Box::new(move |msg| {
+    //          // FFS
+    //          match weak_tx.upgrade() {
+    //              Some(tx) => {
+    //                  mpsc::UnboundedSender::clone(&*tx).start_send(ActorEvent::Exec(Box::new(
+    //                      move |actor, ctx| {
+    //                          Box::pin(async move {
+    //                              let mut actor = actor.lock().await;
+    //                              Handler::handle(&mut *actor, &ctx, msg).await;
+    //                          })
+    //                      },
+    //                  )))?;
+    //                  // Arc::downgrade(&tx);
+    //                  Ok(())
+    //              }
+    //              None => Ok(()),
+    //          }
+    //      }))
+    //  }
 
     /// Wait for an actor to finish, and if the actor has finished, the function returns immediately.
     pub async fn wait_for_stop(self) {

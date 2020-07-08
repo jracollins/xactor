@@ -53,6 +53,7 @@ impl<A> Context<A> {
     pub fn address(&self) -> Addr<A> {
         Addr {
             actor_id: self.actor_id,
+            // This getting unwrap panics
             tx: self.tx.upgrade().unwrap(),
             rx_exit: self.rx_exit.clone(),
         }
@@ -196,7 +197,9 @@ impl<A> Context<A> {
         A: Handler<T>,
         T: Message<Result = ()>,
     {
-        let addr = self.address();
+        // we use sender so that the interval doesn't keep reference to address and stop the actor from being stopped
+        let addr = self.address().sender();
+        // let addr = self.address();
         spawn(async move {
             sleep(after).await;
             addr.send(msg).ok();
@@ -211,7 +214,8 @@ impl<A> Context<A> {
         F: Fn() -> T + Sync + Send + 'static,
         T: Message<Result = ()>,
     {
-        let addr = self.address();
+        let addr = self.address().sender();
+        // let addr = self.address();
         spawn(async move {
             loop {
                 sleep(dur).await;

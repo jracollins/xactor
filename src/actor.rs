@@ -60,6 +60,10 @@ pub trait Actor: Sized + Send + 'static {
         Ok(())
     }
 
+    async fn restarted(&mut self, ctx: &mut Context<Self>) -> Result<()> {
+        Ok(())
+    }
+
     /// Called after an actor is stopped.
     async fn stopped(&mut self, ctx: &mut Context<Self>) {}
 
