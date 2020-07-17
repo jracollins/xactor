@@ -4,7 +4,7 @@ use futures::future::Shared;
 use futures::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 type ExecFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
@@ -32,6 +32,16 @@ impl<A> Clone for Addr<A> {
         Self {
             actor_id: self.actor_id,
             tx: self.tx.clone(),
+            rx_exit: self.rx_exit.clone(),
+        }
+    }
+}
+
+impl<A> Addr<A> {
+    fn downgrade(&self) -> WeakAddr<A> {
+        WeakAddr {
+            actor_id: self.actor_id,
+            tx: Arc::downgrade(&self.tx),
             rx_exit: self.rx_exit.clone(),
         }
     }
@@ -112,7 +122,9 @@ impl<A: Actor> Addr<A> {
         A: Handler<T>,
     {
         let weak_tx = Arc::downgrade(&self.tx);
-        Sender(Box::new(move |msg| match weak_tx.upgrade() {
+        Sender{
+            actor_id: self.actor_id.clone(),
+            sender_fn: Box::new(move |msg| match weak_tx.upgrade() {
             Some(tx) => {
                 mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(Box::new(
                     move |actor, ctx| {
@@ -124,7 +136,8 @@ impl<A: Actor> Addr<A> {
                 Ok(())
             }
             None => Ok(()),
-        }))
+        })
+    }
     }
 
     //  /// Create a `Sender<T>` for a specific message type
@@ -160,5 +173,23 @@ impl<A: Actor> Addr<A> {
         } else {
             futures::future::pending::<()>().await;
         }
+    }
+}
+
+pub struct WeakAddr<A> {
+    pub(crate) actor_id: u64,
+    pub(crate) tx: Weak<mpsc::UnboundedSender<ActorEvent<A>>>,
+    pub(crate) rx_exit: Option<Shared<oneshot::Receiver<()>>>,
+}
+
+impl<A> PartialEq for WeakAddr<A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.actor_id == other.actor_id
+    }
+}
+
+impl<A> Hash for WeakAddr<A> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.actor_id.hash(state)
     }
 }

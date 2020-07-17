@@ -2,7 +2,9 @@ use crate::addr::ActorEvent;
 use crate::runtime::spawn;
 use crate::{Actor, Addr, Context};
 use anyhow::Result;
-use futures::StreamExt;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::oneshot;
+use futures::{FutureExt, StreamExt};
 
 /// Actor supervisor
 ///
@@ -34,21 +36,21 @@ impl Supervisor {
     ///
     /// #[async_trait::async_trait]
     /// impl Handler<Add> for MyActor {
-    ///     async fn handle(&mut self, ctx: &mut Context<Self>, _: Add) {
+    ///     async fn handle(&mut self, ctx: &Context<Self>, _: Add) {
     ///         self.0 += 1;
     ///     }
     /// }
     ///
     /// #[async_trait::async_trait]
     /// impl Handler<Get> for MyActor {
-    ///     async fn handle(&mut self, ctx: &mut Context<Self>, _: Get) -> i32 {
+    ///     async fn handle(&mut self, ctx: &Context<Self>, _: Get) -> i32 {
     ///         self.0
     ///     }
     /// }
     ///
     /// #[async_trait::async_trait]
     /// impl Handler<Die> for MyActor {
-    ///     async fn handle(&mut self, ctx: &mut Context<Self>, _: Die) {
+    ///     async fn handle(&mut self, ctx: &Context<Self>, _: Die) {
     ///         ctx.stop(None);
     ///     }
     /// }
@@ -75,7 +77,9 @@ impl Supervisor {
         A: Actor,
         F: Fn() -> A + Send + 'static,
     {
-        let (mut ctx, mut rx, tx) = Context::new(None);
+        let (tx_exit, rx_exit) = oneshot::channel();
+        let rx_exit = rx_exit.shared();
+        let (mut ctx, mut rx, tx) = Context::new(Some(rx_exit));
         let addr = Addr {
             actor_id: ctx.actor_id(),
             tx: tx.clone(),
@@ -103,11 +107,10 @@ impl Supervisor {
                         }
                     }
 
+                    actor.stopped(&mut ctx).await;
                     for (_, handle) in ctx.streams.iter() {
                         handle.abort();
                     }
-
-                    actor.stopped(&mut ctx).await;
 
                     actor.restarted(&mut ctx).await.ok();
                 }
