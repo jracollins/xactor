@@ -38,7 +38,7 @@ impl<A> Clone for Addr<A> {
 }
 
 impl<A> Addr<A> {
-    fn downgrade(&self) -> WeakAddr<A> {
+    pub fn downgrade(&self) -> WeakAddr<A> {
         WeakAddr {
             actor_id: self.actor_id,
             tx: Arc::downgrade(&self.tx),
@@ -122,49 +122,23 @@ impl<A: Actor> Addr<A> {
         A: Handler<T>,
     {
         let weak_tx = Arc::downgrade(&self.tx);
-        Sender{
+        Sender {
             actor_id: self.actor_id.clone(),
             sender_fn: Box::new(move |msg| match weak_tx.upgrade() {
-            Some(tx) => {
-                mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(Box::new(
-                    move |actor, ctx| {
-                        Box::pin(async move {
-                            Handler::handle(&mut *actor, ctx, msg).await;
-                        })
-                    },
-                )))?;
-                Ok(())
-            }
-            None => Ok(()),
-        })
+                Some(tx) => {
+                    mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(Box::new(
+                        move |actor, ctx| {
+                            Box::pin(async move {
+                                Handler::handle(&mut *actor, ctx, msg).await;
+                            })
+                        },
+                    )))?;
+                    Ok(())
+                }
+                None => Ok(()),
+            }),
+        }
     }
-    }
-
-    //  /// Create a `Sender<T>` for a specific message type
-    //  pub fn sender<T: Message<Result = ()>>(&self) -> Sender<T>
-    //  where
-    //      A: Handler<T>,
-    //  {
-    //      let weak_tx = Arc::downgrade(&self.tx);
-    //      Sender(Box::new(move |msg| {
-    //          // FFS
-    //          match weak_tx.upgrade() {
-    //              Some(tx) => {
-    //                  mpsc::UnboundedSender::clone(&*tx).start_send(ActorEvent::Exec(Box::new(
-    //                      move |actor, ctx| {
-    //                          Box::pin(async move {
-    //                              let mut actor = actor.lock().await;
-    //                              Handler::handle(&mut *actor, &ctx, msg).await;
-    //                          })
-    //                      },
-    //                  )))?;
-    //                  // Arc::downgrade(&tx);
-    //                  Ok(())
-    //              }
-    //              None => Ok(()),
-    //          }
-    //      }))
-    //  }
 
     /// Wait for an actor to finish, and if the actor has finished, the function returns immediately.
     pub async fn wait_for_stop(self) {
@@ -191,5 +165,28 @@ impl<A> PartialEq for WeakAddr<A> {
 impl<A> Hash for WeakAddr<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.actor_id.hash(state)
+    }
+}
+
+impl<A> WeakAddr<A> {
+    pub fn upgrade(&self) -> Option<Addr<A>> {
+        match self.tx.upgrade() {
+            Some(tx) => Some(Addr {
+                actor_id: self.actor_id,
+                tx,
+                rx_exit: self.rx_exit.clone(),
+            }),
+            None => None,
+        }
+    }
+}
+
+impl<A> Clone for WeakAddr<A> {
+    fn clone(&self) -> Self {
+        Self {
+            actor_id: self.actor_id,
+            tx: self.tx.clone(),
+            rx_exit: self.rx_exit.clone(),
+        }
     }
 }

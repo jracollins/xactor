@@ -12,6 +12,7 @@ use futures::{FutureExt, StreamExt};
 /// When the actor fails, recreate a new actor instance and replace it.
 pub struct Supervisor;
 
+
 impl Supervisor {
     /// Start a supervisor
     ///
