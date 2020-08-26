@@ -190,3 +190,10 @@ impl<A> Clone for WeakAddr<A> {
         }
     }
 }
+
+impl<A: Actor> WeakAddr<A> {
+    /// Returns the id of the actor.
+    pub fn actor_id(&self) -> u64 {
+        self.actor_id
+    }
+}
