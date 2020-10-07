@@ -8,9 +8,7 @@ use xactor::*;
 
 #[xactor::main]
 async fn main() -> std::io::Result<()> {
-    let parent_addr = QuickActor {
-        parent: None
-    }.start().await.unwrap();
+    let parent_addr = QuickActor { parent: None }.start().await.unwrap();
     parent_addr.wait_for_stop().await;
     Ok(())
 }
@@ -29,7 +27,6 @@ impl Actor for QuickActor {
     }
 }
 
-
 #[message]
 struct DropParent;
 
@@ -40,9 +37,6 @@ impl Handler<DropParent> for QuickActor {
         self.parent = None;
     }
 }
-
-
-
 
 // Subscriber Parent - A
 
@@ -107,7 +101,6 @@ impl Handler<ClearChildSubscribers> for SubscriberParent {
 #[async_trait::async_trait]
 impl Handler<ChildStopping> for SubscriberParent {
     async fn handle(&mut self, _ctx: &mut Context<Self>, msg: ChildStopping) {
-        
         println!("Handling Child Stopping! - id: {}", msg.id)
     }
 }
@@ -117,15 +110,19 @@ impl Handler<ChildStopping> for SubscriberParent {
 struct Subscriber {
     id: i32,
     message_producer_addr: Addr<MessageProducer>,
-    parent_addr: Sender<ChildStopping>
+    parent_addr: Sender<ChildStopping>,
 }
 
 impl Subscriber {
-    fn new(id: i32, message_producer_addr: Addr<MessageProducer>, parent_addr: Addr<SubscriberParent>) -> Subscriber {
+    fn new(
+        id: i32,
+        message_producer_addr: Addr<MessageProducer>,
+        parent_addr: Addr<SubscriberParent>,
+    ) -> Subscriber {
         Subscriber {
             id,
             message_producer_addr,
-            parent_addr: parent_addr.sender()
+            parent_addr: parent_addr.sender(),
         }
     }
 }
@@ -146,10 +143,7 @@ impl Actor for Subscriber {
         // Send subscription request message to the Message Producer
         println!("Child Stopped {}", self.id);
 
-        let _ = self.parent_addr.send(ChildStopping {
-            id: self.id,
-        });
-
+        let _ = self.parent_addr.send(ChildStopping { id: self.id });
     }
 }
 
@@ -157,7 +151,6 @@ impl Actor for Subscriber {
 struct ChildStopping {
     id: i32,
 }
-
 
 #[async_trait::async_trait]
 impl Handler<RandomMessage> for Subscriber {

@@ -1,11 +1,11 @@
 use crate::{Actor, Addr, Message, Result};
 use std::future::Future;
-use std::pin::Pin;
 use std::hash::{Hash, Hasher};
-
+use std::pin::Pin;
 
 pub(crate) type CallerFn<T> = Box<
     dyn Fn(T) -> Pin<Box<dyn Future<Output = Result<<T as Message>::Result>> + Send + 'static>>
+        + Send
         + 'static,
 >;
 
@@ -30,7 +30,7 @@ impl<T: Message> Caller<T> {
 // }
 
 /// Sender of a specific message type
-pub struct Sender<T: Message>  {
+pub struct Sender<T: Message> {
     pub actor_id: u64,
     pub(crate) sender_fn: SenderFn<T>,
 }
@@ -40,7 +40,6 @@ impl<T: Message<Result = ()>> Sender<T> {
         (self.sender_fn)(msg)
     }
 }
-
 
 impl<T: Message<Result = ()>> PartialEq for Sender<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -53,8 +52,6 @@ impl<T: Message<Result = ()>> Hash for Sender<T> {
         self.actor_id.hash(state)
     }
 }
-
-
 
 // /// Sender of a specific message type
 // pub struct WeakSender<T: Message, A: Actor>  {

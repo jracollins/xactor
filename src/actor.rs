@@ -5,6 +5,7 @@ use anyhow::Result;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
 use futures::{FutureExt, StreamExt};
+use std::sync::Arc;
 
 /// Represents a message that can be handled by the actor.
 pub trait Message: 'static + Send {
@@ -13,11 +14,16 @@ pub trait Message: 'static + Send {
     type Result: 'static + Send;
 }
 
+// impl<M> Message for Arc<M> where M: Message {}
+
 /// Describes how to handle messages of a specific type.
 /// Implementing Handler is a general way to handle incoming messages.
 /// The type T is a message which can be handled by the actor.
 #[async_trait::async_trait]
-pub trait Handler<T: Message>: Actor {
+pub trait Handler<T: Message>: Actor
+where
+    Self: std::marker::Sized,
+{
     /// Method is called for every message received by this Actor.
     async fn handle(&mut self, ctx: &mut Context<Self>, msg: T) -> T::Result;
 }
