@@ -12,7 +12,6 @@ use futures::{FutureExt, StreamExt};
 /// When the actor fails, recreate a new actor instance and replace it.
 pub struct Supervisor;
 
-
 impl Supervisor {
     /// Start a supervisor
     ///
@@ -121,15 +120,3 @@ impl Supervisor {
         Ok(addr)
     }
 }
-
-// while let Some(event) = rx.next().await {
-//     match event {
-//         ActorEvent::Exec(f) => f(actor.clone(), ctx.clone()).await,
-//         ActorEvent::Stop(_err) => {
-//             actor.lock().await.stopped(&ctx).await;
-//             actor.lock().await.started(&ctx).await.ok();
-//         }
-//     }
-// }
-
-// actor.lock().await.stopped(&ctx).await;

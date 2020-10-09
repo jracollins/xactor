@@ -109,11 +109,32 @@ impl<A: Actor> Addr<A> {
     where
         A: Handler<T>,
     {
-        let addr = self.clone();
-        Caller(Box::new(move |msg| {
-            let addr = addr.clone();
-            Box::pin(async move { addr.call(msg).await })
-        }))
+        let weak_tx = Arc::downgrade(&self.tx);
+
+        Caller {
+            actor_id: self.actor_id.clone(),
+            caller_fn: Box::new(move |msg| {
+                let weak_tx_option = weak_tx.upgrade();
+                Box::pin(async move {
+                    match weak_tx_option {
+                        Some(tx) => {
+                            let (oneshot_tx, oneshot_rx) = oneshot::channel();
+
+                            mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(
+                                Box::new(move |actor, ctx| {
+                                    Box::pin(async move {
+                                        let res = Handler::handle(&mut *actor, ctx, msg).await;
+                                        let _ = oneshot_tx.send(res);
+                                    })
+                                }),
+                            ))?;
+                            Ok(oneshot_rx.await?)
+                        }
+                        None => Err(anyhow::anyhow!("Actor Dropped")),
+                    }
+                })
+            }),
+        }
     }
 
     /// Create a `Sender<T>` for a specific message type
