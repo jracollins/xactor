@@ -143,21 +143,27 @@ impl<A: Actor> Addr<A> {
         A: Handler<T>,
     {
         let weak_tx = Arc::downgrade(&self.tx);
+
+        let closure = move |msg| match weak_tx.upgrade() {
+            Some(tx) => {
+                mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(Box::new(
+                    move |actor, ctx| {
+                        Box::pin(async move {
+                            Handler::handle(&mut *actor, ctx, msg).await;
+                        })
+                    },
+                )))?;
+                Ok(())
+            }
+            None => Ok(()),
+        };
+
+        let copy_closure = || closure.clone();
+
+        let sender_fn = Box::new(closure);
         Sender {
             actor_id: self.actor_id.clone(),
-            sender_fn: Box::new(move |msg| match weak_tx.upgrade() {
-                Some(tx) => {
-                    mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(Box::new(
-                        move |actor, ctx| {
-                            Box::pin(async move {
-                                Handler::handle(&mut *actor, ctx, msg).await;
-                            })
-                        },
-                    )))?;
-                    Ok(())
-                }
-                None => Ok(()),
-            }),
+            sender_fn,
         }
     }
 

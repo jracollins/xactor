@@ -23,6 +23,7 @@ anyhow = "1.0"
 xactor-derive = { path = "xactor-derive", version = "0.7"}
 fnv = "1.0"
 slab = "0.4"
+dyn-clone = "1.0.3"
 
 [workspace]
 members = [

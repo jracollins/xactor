@@ -54,7 +54,11 @@ pub struct Sender<T: Message> {
 
 impl<T: Message<Result = ()>> Sender<T> {
     pub fn send(&self, msg: T) -> Result<()> {
-        self.sender_fn.send(msg)
+        let func = self.sender_fn;
+        let func2 = func.clone();
+        func(msg)
+        // (self.sender_fn)(msg)
+        // Ok(())
     }
 }
 
@@ -90,15 +94,6 @@ impl<T: Message<Result = ()>> Clone for SenderFn<T> {
 }
 
 use dyn_clone::DynClone;
-pub trait SenderClosure<T>: DynClone + 'static + Send {
-    fn send(&self, msg: T) -> Result<()>;
-}
+pub trait SenderClosure<T>: DynClone + 'static + Send {}
 
-impl<T, F> SenderClosure<T> for F
-where
-    F: Fn(T) -> Result<()> + 'static + Send + Clone,
-{
-    fn send(&self, msg: T) -> Result<()> {
-        (self)(msg)
-    }
-}
+impl<T, F> SenderClosure<T> for F where F: Fn(T) -> Result<()> + 'static + Send + Clone {}
