@@ -3,24 +3,18 @@ use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 
-pub(crate) type CallerFn<T> = Box<
-    dyn Fn(T) -> Pin<Box<dyn Future<Output = Result<<T as Message>::Result>> + Send + 'static>>
-        + Send
-        + 'static,
->;
-
 /// Caller of a specific message type
 ///
 /// Like `Sender<T>`, Caller has a weak reference to the recipient of the message type, and so will not prevent an actor from stopping if all Addr's have been dropped elsewhere.
 
 pub struct Caller<T: Message> {
     pub actor_id: u64,
-    pub(crate) caller_fn: CallerFn<T>,
+    pub(crate) caller_fn: Box<dyn CallerFn<T>>,
 }
 
 impl<T: Message> Caller<T> {
     pub async fn call(&self, msg: T) -> Result<T::Result> {
-        (self.caller_fn)(msg).await
+        self.caller_fn.call(msg).await
     }
 }
 
@@ -36,11 +30,14 @@ impl<T: Message<Result = ()>> Hash for Caller<T> {
     }
 }
 
-// impl<T: Message> Clone for Caller<T> {
-//     fn clone(&self) -> Caller<T> {
-//         self.clone()
-//     }
-// }
+impl<T: Message<Result = ()>> Clone for Caller<T> {
+    fn clone(&self) -> Caller<T> {
+        Caller {
+            actor_id: self.actor_id.clone(),
+            caller_fn: dyn_clone::clone_box(&*self.caller_fn),
+        }
+    }
+}
 
 /// Sender of a specific message type
 ///
@@ -49,7 +46,7 @@ impl<T: Message<Result = ()>> Hash for Caller<T> {
 
 pub struct Sender<T: Message> {
     pub actor_id: u64,
-    pub(crate) sender_fn: Box<dyn FnClone<T>>,
+    pub(crate) sender_fn: Box<dyn SenderFn<T>>,
 }
 
 impl<T: Message<Result = ()>> Sender<T> {
@@ -79,50 +76,40 @@ impl<T: Message<Result = ()>> Clone for Sender<T> {
     }
 }
 
-// SENDER FN
-
-// pub type SenderFn<T: Message<Result = ()>> = Box<dyn Fn(T) -> Result<()> + 'static + Send>;
-
-// impl Clone for SenderFn<T>
-// where
-//     T: Message<Result = ()>,
-// {
-//     fn clone(&self) -> SenderFn<T> {
-//         // let cloned = dyn_clone::clone_box(&*self);
-//     }
-// }
-
-// use dyn_clone::DynClone;
-// pub trait SenderClosure<T>: DynClone + Fn(T) -> Result<()> + 'static + Send + Clone {}
-
-// impl<T: Message<Result = ()>> SenderClosure<T> for SenderFn<T> {}
-
-// // ********
-
-// impl<T, F> SenderClosure<T> for F
-// where
-//     F: Fn(T) -> Result<()> + 'static + Send + Clone,
-// {
-//     // fn send(&self, msg: T) -> Result<()> {
-//     //     (self)(msg)
-//     // }
-// }
+// https://stackoverflow.com/questions/63842261/how-to-derive-clone-for-structures-with-boxed-closure
 
 use dyn_clone::DynClone;
 
-pub trait FnClone<T>: DynClone + 'static + Send
+pub trait SenderFn<T>: DynClone + 'static + Send
 where
-    T: Message<Result = ()>,
+    T: Message,
 {
     fn send(&self, msg: T) -> Result<()>;
 }
 
-impl<F, T> FnClone<T> for F
+impl<F, T> SenderFn<T> for F
 where
     F: Fn(T) -> Result<()> + 'static + Send + Clone,
-    T: Message<Result = ()>,
+    T: Message,
 {
     fn send(&self, msg: T) -> Result<()> {
+        self(msg)
+    }
+}
+
+pub trait CallerFn<T>: DynClone + 'static + Send
+where
+    T: Message,
+{
+    fn call(&self, msg: T) -> Pin<Box<dyn Future<Output = Result<T::Result>>>>;
+}
+
+impl<F, T> CallerFn<T> for F
+where
+    F: Fn(T) -> Pin<Box<dyn Future<Output = Result<T::Result>>>> + 'static + Send + Clone,
+    T: Message,
+{
+    fn call(&self, msg: T) -> Pin<Box<dyn Future<Output = Result<T::Result>>>> {
         self(msg)
     }
 }

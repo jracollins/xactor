@@ -111,29 +111,33 @@ impl<A: Actor> Addr<A> {
     {
         let weak_tx = Arc::downgrade(&self.tx);
 
+        let closure = move |msg: T| {
+            let weak_tx_option = weak_tx.upgrade();
+            Box::pin(async move {
+                match weak_tx_option {
+                    Some(tx) => {
+                        let (oneshot_tx, oneshot_rx) = oneshot::channel();
+
+                        mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(
+                            Box::new(move |actor, ctx| {
+                                Box::pin(async move {
+                                    let res = Handler::handle(&mut *actor, ctx, msg).await;
+                                    let _ = oneshot_tx.send(res);
+                                })
+                            }),
+                        ))?;
+
+                        let result = oneshot_rx.await?;
+                        Ok(result)
+                    }
+                    None => Err(anyhow::anyhow!("Actor Dropped")),
+                }
+            }) as Pin<Box<dyn Future<Output = Result<T::Result>>>>
+        };
+
         Caller {
             actor_id: self.actor_id.clone(),
-            caller_fn: Box::new(move |msg| {
-                let weak_tx_option = weak_tx.upgrade();
-                Box::pin(async move {
-                    match weak_tx_option {
-                        Some(tx) => {
-                            let (oneshot_tx, oneshot_rx) = oneshot::channel();
-
-                            mpsc::UnboundedSender::clone(&tx).start_send(ActorEvent::Exec(
-                                Box::new(move |actor, ctx| {
-                                    Box::pin(async move {
-                                        let res = Handler::handle(&mut *actor, ctx, msg).await;
-                                        let _ = oneshot_tx.send(res);
-                                    })
-                                }),
-                            ))?;
-                            Ok(oneshot_rx.await?)
-                        }
-                        None => Err(anyhow::anyhow!("Actor Dropped")),
-                    }
-                })
-            }),
+            caller_fn: Box::new(closure),
         }
     }
 
@@ -157,8 +161,6 @@ impl<A: Actor> Addr<A> {
             }
             None => Ok(()),
         };
-
-        let copy_closure = || closure.clone();
 
         let sender_fn = Box::new(closure);
         Sender {
