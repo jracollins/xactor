@@ -24,6 +24,7 @@ fnv = "1.0.7"
 slab = "0.4.2"
 anyhow = { version = "1.0.37", optional = true }
 eyre = { version = "0.6.5", optional = true }
+dyn-clone = "1.0.3"
 
 [workspace]
 members = [
