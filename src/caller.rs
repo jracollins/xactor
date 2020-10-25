@@ -49,7 +49,7 @@ impl<T: Message<Result = ()>> Hash for Caller<T> {
 
 pub struct Sender<T: Message> {
     pub actor_id: u64,
-    pub(crate) sender_fn: SenderFn<T>,
+    pub(crate) sender_fn: Box<dyn FnClone<T>>,
 }
 
 impl<T: Message<Result = ()>> Sender<T> {
@@ -74,31 +74,55 @@ impl<T: Message<Result = ()>> Clone for Sender<T> {
     fn clone(&self) -> Sender<T> {
         Sender {
             actor_id: self.actor_id.clone(),
-            sender_fn: self.sender_fn.clone(),
+            sender_fn: dyn_clone::clone_box(&*self.sender_fn),
         }
     }
 }
 
 // SENDER FN
 
-type SenderFn<T: Message<Result = ()>> = Box<dyn SenderClosure<T>>;
+// pub type SenderFn<T: Message<Result = ()>> = Box<dyn Fn(T) -> Result<()> + 'static + Send>;
 
-impl<T: Message<Result = ()>> Clone for SenderFn<T> {
-    fn clone(&self) -> SenderFn<T> {
-        *dyn_clone::clone_box(&*self)
-    }
-}
+// impl Clone for SenderFn<T>
+// where
+//     T: Message<Result = ()>,
+// {
+//     fn clone(&self) -> SenderFn<T> {
+//         // let cloned = dyn_clone::clone_box(&*self);
+//     }
+// }
+
+// use dyn_clone::DynClone;
+// pub trait SenderClosure<T>: DynClone + Fn(T) -> Result<()> + 'static + Send + Clone {}
+
+// impl<T: Message<Result = ()>> SenderClosure<T> for SenderFn<T> {}
+
+// // ********
+
+// impl<T, F> SenderClosure<T> for F
+// where
+//     F: Fn(T) -> Result<()> + 'static + Send + Clone,
+// {
+//     // fn send(&self, msg: T) -> Result<()> {
+//     //     (self)(msg)
+//     // }
+// }
 
 use dyn_clone::DynClone;
-pub trait SenderClosure<T>: DynClone + 'static + Send {
+
+pub trait FnClone<T>: DynClone + 'static + Send
+where
+    T: Message<Result = ()>,
+{
     fn send(&self, msg: T) -> Result<()>;
 }
 
-impl<T, F> SenderClosure<T> for F
+impl<F, T> FnClone<T> for F
 where
     F: Fn(T) -> Result<()> + 'static + Send + Clone,
+    T: Message<Result = ()>,
 {
     fn send(&self, msg: T) -> Result<()> {
-        (self)(msg)
+        self(msg)
     }
 }
