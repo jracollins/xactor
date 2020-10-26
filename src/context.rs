@@ -7,6 +7,7 @@ use futures::future::{AbortHandle, Abortable, Shared};
 use futures::{Stream, StreamExt};
 use once_cell::sync::OnceCell;
 use slab::Slab;
+use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -17,6 +18,14 @@ pub struct Context<A> {
     tx: Weak<mpsc::UnboundedSender<ActorEvent<A>>>,
     pub(crate) rx_exit: Option<Shared<oneshot::Receiver<()>>>,
     pub(crate) streams: Slab<AbortHandle>,
+}
+
+impl<A> fmt::Debug for Context<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Context")
+            .field("actor_id", &self.actor_id)
+            .finish()
+    }
 }
 
 impl<A> Context<A> {
