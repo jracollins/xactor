@@ -6,6 +6,7 @@ use std::pin::Pin;
 /// Caller of a specific message type
 ///
 /// Like `Sender<T>`, Caller has a weak reference to the recipient of the message type, and so will not prevent an actor from stopping if all Addr's have been dropped elsewhere.
+/// This takes a boxed closure with the message as a parameter with the mpsc channel of the actor inside and the type of actor abstracted away.
 
 pub struct Caller<T: Message> {
     pub actor_id: u64,
@@ -77,7 +78,7 @@ impl<T: Message<Result = ()>> Clone for Sender<T> {
 }
 
 // https://stackoverflow.com/questions/63842261/how-to-derive-clone-for-structures-with-boxed-closure
-
+// https://users.rust-lang.org/t/expected-opaque-type-found-a-different-opaque-type-when-trying-futures-join-all/40596/3
 use dyn_clone::DynClone;
 
 pub trait SenderFn<T>: DynClone + 'static + Send
