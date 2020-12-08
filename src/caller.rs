@@ -19,19 +19,19 @@ impl<T: Message> Caller<T> {
     }
 }
 
-impl<T: Message<Result = ()>> PartialEq for Caller<T> {
+impl<T: Message> PartialEq for Caller<T> {
     fn eq(&self, other: &Self) -> bool {
         self.actor_id == other.actor_id
     }
 }
 
-impl<T: Message<Result = ()>> Hash for Caller<T> {
+impl<T: Message> Hash for Caller<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.actor_id.hash(state)
     }
 }
 
-impl<T: Message<Result = ()>> Clone for Caller<T> {
+impl<T: Message> Clone for Caller<T> {
     fn clone(&self) -> Caller<T> {
         Caller {
             actor_id: self.actor_id.clone(),
@@ -81,7 +81,7 @@ impl<T: Message<Result = ()>> Clone for Sender<T> {
 // https://users.rust-lang.org/t/expected-opaque-type-found-a-different-opaque-type-when-trying-futures-join-all/40596/3
 use dyn_clone::DynClone;
 
-pub trait SenderFn<T>: DynClone + 'static + Send
+pub trait SenderFn<T>: DynClone + 'static + Send + Sync
 where
     T: Message,
 {
@@ -90,7 +90,7 @@ where
 
 impl<F, T> SenderFn<T> for F
 where
-    F: Fn(T) -> Result<()> + 'static + Send + Clone,
+    F: Fn(T) -> Result<()> + 'static + Send + Sync + Clone,
     T: Message,
 {
     fn send(&self, msg: T) -> Result<()> {
@@ -98,7 +98,7 @@ where
     }
 }
 
-pub trait CallerFn<T>: DynClone + 'static + Send
+pub trait CallerFn<T>: DynClone + 'static + Send + Sync
 where
     T: Message,
 {
@@ -107,7 +107,7 @@ where
 
 impl<F, T> CallerFn<T> for F
 where
-    F: Fn(T) -> Pin<Box<dyn Future<Output = Result<T::Result>>>> + 'static + Send + Clone,
+    F: Fn(T) -> Pin<Box<dyn Future<Output = Result<T::Result>>>> + 'static + Send + Sync + Clone,
     T: Message,
 {
     fn call(&self, msg: T) -> Pin<Box<dyn Future<Output = Result<T::Result>>>> {
